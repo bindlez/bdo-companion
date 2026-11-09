@@ -36,3 +36,5 @@ dotnet publish desktop/Companion.Desktop.csproj -c Release -r win-x64 --self-con
 ```
 
 See [Contributing and releases](CONTRIBUTING.md) for branch and release conventions.
+
+See the [product and engineering specification](docs/SPEC.md) for scope, competitor comparisons and release gates.
