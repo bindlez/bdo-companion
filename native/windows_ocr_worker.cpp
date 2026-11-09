@@ -49,7 +49,12 @@ int main(){
     if(!w||!h||uint64_t(w)*h>1'500'000||w>OcrEngine::MaxImageDimension()||h>OcrEngine::MaxImageDimension())throw hresult_invalid_argument();
     auto bitmap=decoder.GetSoftwareBitmapAsync(BitmapPixelFormat::Bgra8,BitmapAlphaMode::Ignore).get();
     auto result=engine.RecognizeAsync(bitmap).get();
-    std::printf("{\"text\":%s,\"words\":[",json(result.Text()).c_str());bool first=true;int count=0,line=0;
+    std::wstring text;
+    for(auto const& row:result.Lines()){
+     if(!text.empty())text+=L'\n';
+     text+=row.Text().c_str();
+    }
+    std::printf("{\"text\":%s,\"words\":[",json(hstring(text)).c_str());bool first=true;int count=0,line=0;
     for(auto const& row:result.Lines()){
      ++line;
      for(auto const& word:row.Words()){

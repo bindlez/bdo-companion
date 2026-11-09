@@ -1,6 +1,6 @@
 # BDO Companion product and engineering specification
 
-Status: working specification, November 8, 2026. Targets below are proposed acceptance gates. The alpha.2 package and BDO Vision 1.13.0-rc.29 are the implementation and behavior baselines respectively.
+Status: working specification, November 8, 2026. Targets below are proposed acceptance gates. The alpha.3 preview and BDO Vision 1.13.0-rc.29 are the implementation and behavior baselines respectively.
 
 ## 1. Product
 
@@ -61,6 +61,8 @@ Targets are provisional until measured. Passing CI verifies the packaged contrac
 Use the same machine, resolution, client scale, language, feed layout, window mode, capture workload and sampling interval across comparisons. Record versions, process trees, hardware, settings, fixture hashes and sample sizes. Run BDO alone first, then rc.29, Companion and each competitor separately. Use at least three repeated runs per scenario. Include idle, ordinary grinding, burst loot, crafting and covered windows. Compare only scenarios each product supports. Avoid comparative claims until matched runs support them.
 
 Alpha.2 local evidence: extracted package passed bridge smoke and desktop lifecycle checks. Sample-mode private memory was 19.6 MiB tracker only, 118.3 MiB with desktop open and 20.0 MiB after closing. These exclude live OCR, BDO and the browser.
+
+Alpha.3 local evidence: synthetic loot overlap and guild parsing passed, as did SQLite reopen and stale-command checks. The Windows OCR worker recognized a two-line synthetic guild fixture. These checks do not establish live accuracy or rc.29 parity. Keep rc.29 as the production version until the live gates pass.
 
 ## 6. Delivery order
 

@@ -22,7 +22,13 @@ The live reader samples only the configured region while a recognized BDO proces
 
 Open [the craft planner](http://127.0.0.1:7292/planner#craft) manually if preferred. Use `--port` if 7292 is occupied. The tracker keeps imported NA/EU market quotes in memory for recipe lookups. Quotes reset when the tracker exits.
 
-This preview covers durability and cached quotes. Live loot and guild tracking, persistent history, external price fetching, and full native planner screens are pending. Use rc.29 for those features.
+For an experimental loot session, add `--loot-region x,y,width,height` for the visible English personal loot feed. Start and finish recording from the desktop window. The reader requires readable personal notifications with bracketed item names and overlapping feed rows. Unknown, wrapped, or ambiguous rows may cause a gap instead of a recorded drop.
+
+Add `--guild-region x,y,width,height` for a crop containing one English Guild Mission or Guild Quest heading and its counter. The desktop and browser expose the last verified reading. Hidden values are marked stale. The reader does not award or infer progress.
+
+Loot sessions write to `%LOCALAPPDATA%\BDO Companion Native\sessions.sqlite`. Use `--profile-root` to place the separate native profile under a disposable folder for tests. The preview does not migrate rc.29 data. To switch back, exit Companion and run rc.29 with its existing profile.
+
+Live capture accuracy, browser timer parity, rare and wrapped loot, native gear and CP, and external price fetching still need work. Use rc.29 for your production sessions.
 
 ## Build from source
 
@@ -33,6 +39,7 @@ dotnet publish -c Release -r win-x64 -o artifacts/native
 ./scripts/Build-OcrWorker.ps1 -OutputDirectory artifacts/native
 dotnet publish desktop/Companion.Desktop.csproj -c Release -r win-x64 --self-contained true -o artifacts/native/desktop
 ./scripts/Test-Bridge.ps1 -Executable artifacts/native/Companion.exe
+dotnet run --project tests/Replay.csproj
 ```
 
 See [Contributing and releases](CONTRIBUTING.md) for branch and release conventions.

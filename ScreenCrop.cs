@@ -13,6 +13,7 @@ internal sealed partial class ScreenCrop : IDisposable
     private readonly CropArea area;
     private nint capturedWindow;
     private Point capturedOrigin;
+    public bool Moved { get; private set; }
 
     public ScreenCrop(CropArea area)
     {
@@ -60,6 +61,7 @@ internal sealed partial class ScreenCrop : IDisposable
                 return null;
             if (!IsVisible(window, origin)) return null;
             Marshal.Copy(pixels, image, 54, image.Length - 54);
+            Moved = capturedWindow != window || capturedOrigin.X != origin.X || capturedOrigin.Y != origin.Y;
             capturedWindow = window;
             capturedOrigin = origin;
             return image;
@@ -145,7 +147,7 @@ internal sealed record CropArea(int X, int Y, int Width, int Height)
     {
         var fields = value.Split(',');
         if (fields.Length != 4 || fields.Any(field => !int.TryParse(field, out _)))
-            throw new ArgumentException("Use --durability-region x,y,width,height.");
+            throw new ArgumentException("Use x,y,width,height for the capture region.");
         var values = Array.ConvertAll(fields, int.Parse);
         var area = new CropArea(values[0], values[1], values[2], values[3]);
         if (area.X is < 0 or > 16384 || area.Y is < 0 or > 16384 ||

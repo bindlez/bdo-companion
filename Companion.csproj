@@ -5,7 +5,7 @@
     <Nullable>enable</Nullable>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
     <ApplicationManifest>companion.manifest</ApplicationManifest>
-    <DefaultItemExcludes>$(DefaultItemExcludes);desktop/**;artifacts/**</DefaultItemExcludes>
+    <DefaultItemExcludes>$(DefaultItemExcludes);desktop/**;artifacts/**;tests/**</DefaultItemExcludes>
     <PublishAot Condition="'$(Configuration)' == 'Release'">true</PublishAot>
   </PropertyGroup>
   <ItemGroup>

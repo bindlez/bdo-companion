@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.1.0-alpha.3
+
+- Added opt-in personal loot and guild regions using the shared Windows OCR worker.
+- Added a separate SQLite profile, manual loot sessions and desktop session summaries.
+- Added replay checks for ambiguous feeds, stale commands and saved history.
+
 ## 0.1.0-alpha.2
 
 - Added opt-in Windows OCR capture for a configured durability region, with two matching readings required before updating the bridge.

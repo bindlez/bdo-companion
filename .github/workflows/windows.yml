@@ -36,7 +36,10 @@ jobs:
           if ($LASTEXITCODE) { exit $LASTEXITCODE }
       - name: Test the published executable
         shell: pwsh
-        run: ./scripts/Test-Bridge.ps1 -Executable artifacts/native/Companion.exe
+        run: |
+          dotnet run --project tests/Replay.csproj
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          ./scripts/Test-Bridge.ps1 -Executable artifacts/native/Companion.exe
       - name: Package Windows build
         shell: pwsh
         run: |

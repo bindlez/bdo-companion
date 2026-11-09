@@ -14,20 +14,27 @@ var planner = builder.Configuration["planner"] is { } path ? Path.GetFullPath(pa
 var sample = builder.Configuration.GetValue("sample", false);
 var bridge = new TrackerBridge(sample);
 var market = new MarketBook();
-if (builder.Configuration["durability-region"] is { } region)
+CropArea? Region(string name) => builder.Configuration[name] is { } value ? CropArea.Parse(value) : null;
+var regions = new CaptureRegions(Region("durability-region"), Region("loot-region"), Region("guild-region"));
+var profileRoot = builder.Configuration["profile-root"];
+var profile = regions.Loot is not null || profileRoot is not null
+    ? Path.Combine(profileRoot ?? Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "BDO Companion Native")
+    : null;
+using var ledger = new SessionLedger(profile);
+if (regions is { Durability: not null } or { Loot: not null } or { Guild: not null })
 {
     if (sample || !OperatingSystem.IsWindows())
         throw new InvalidOperationException("Live capture requires Windows and cannot run in sample mode.");
-    var area = CropArea.Parse(region);
+    if (regions.Guild is not null) bridge.EnableGuild();
     var worker = Path.GetFullPath(builder.Configuration["ocr-worker"] ??
         Path.Combine(AppContext.BaseDirectory, "vision-windows-ocr.exe"));
     if (!File.Exists(worker))
         throw new FileNotFoundException("Build the Windows OCR worker or specify --ocr-worker.", worker);
     var pace = builder.Configuration.GetValue("seconds-per-craft", 0d);
-    if (!double.IsFinite(pace) || pace <= 0 || pace > 3600)
+    if (regions.Durability is not null && (!double.IsFinite(pace) || pace <= 0 || pace > 3600))
         throw new ArgumentException("Set --seconds-per-craft to a number between 0 and 3600.");
-    builder.Services.AddHostedService(services => new DurabilityTracker(
-        area, worker, pace, bridge, services.GetRequiredService<ILogger<DurabilityTracker>>()));
+    builder.Services.AddHostedService(services => new GameScanner(
+        regions, worker, pace, bridge, ledger, services.GetRequiredService<ILogger<GameScanner>>()));
 }
 var authority = $"127.0.0.1:{port}";
 builder.WebHost.ConfigureKestrel(server =>
@@ -56,7 +63,16 @@ app.MapGet("/health", () => Results.Json(
     new BridgeHealth(true, "bdo-vision", version, 13, bridge.InstanceId,
         bridge.Reading.Signal, bridge.LastAcknowledgedSignal, port, Environment.ProcessId,
         File.Exists(planner), sample), BridgeJson.Default.BridgeHealth));
-app.MapGet("/durability", () => Results.Json(bridge.Reading, BridgeJson.Default.DurabilityReading));
+app.MapGet("/durability", () => Results.Json(bridge.Reading with { GuildStatus = bridge.Guild }, BridgeJson.Default.DurabilityReading));
+app.MapGet("/guild-quest", () => Results.Json(bridge.Guild, BridgeJson.Default.GuildReading));
+app.MapGet("/companion/session", () => Results.Json(ledger.State, BridgeJson.Default.SessionState));
+app.MapGet("/companion/history", (HttpRequest request) =>
+{
+    var id = request.Query["id"].ToString();
+    return id.Length > 0 && !Guid.TryParseExact(id, "N", out _)
+        ? Error("Invalid session ID", 400)
+        : Results.Json(ledger.History(id.Length == 0 ? null : id), BridgeJson.Default.SessionHistory);
+});
 IResult OpenPlanner() => File.Exists(planner)
     ? Results.File(planner, "text/html; charset=utf-8")
     : Error("Start Companion with --planner and the rc.29 planner HTML path.", 404);
@@ -79,6 +95,14 @@ MapJsonPost("/craft-quotes", 16384, BridgeJson.Default.RecipeLookup, lookup =>
     market.Lookup(lookup) is { } quotes
         ? Results.Json(quotes, BridgeJson.Default.MarketQuotes)
         : Error("Invalid recipe lookup", 400));
+MapJsonPost("/companion/session", 4096, BridgeJson.Default.SessionCommand, command =>
+{
+    if (!ledger.Enabled) return Error("Configure a loot region to enable recording.", 503);
+    return command is { Generation: { } generation } && command.InstanceId == bridge.InstanceId &&
+        ledger.Apply(command.Action, command.SessionId, generation) is { } changed
+        ? Results.Json(changed, BridgeJson.Default.SessionState)
+        : Error("Session changed or command unavailable", 409);
+});
 app.Run();
 
 void MapJsonPost<T>(string route, int limit, JsonTypeInfo<T> schema, Func<T?, IResult> handle)
@@ -122,9 +146,11 @@ sealed class TrackerBridge
     private readonly object gate = new();
     private int lastAcknowledgedSignal;
     private DurabilityReading reading;
+    private GuildReading guild = new(false, false, null, null, null, null);
 
     public string InstanceId { get; } = Guid.NewGuid().ToString("N");
     public DurabilityReading Reading => Volatile.Read(ref reading);
+    public GuildReading Guild => Volatile.Read(ref guild);
     public int LastAcknowledgedSignal => Volatile.Read(ref lastAcknowledgedSignal);
 
     public TrackerBridge(bool sample)
@@ -147,6 +173,14 @@ sealed class TrackerBridge
         }
     }
 
+    public void EnableGuild() => Volatile.Write(ref guild, Guild with { Enabled = true });
+    public void UpdateGuild(QuestCounter counter, double observedAt) =>
+        Volatile.Write(ref guild, new GuildReading(true, true, counter.Current, counter.Target, counter.Label, observedAt));
+    public void HideGuild()
+    {
+        if (Guild is { Available: true } current) Volatile.Write(ref guild, current with { Available = false });
+    }
+
     public bool TryAcknowledge(Acknowledgment acknowledgment)
     {
         lock (gate)
@@ -161,7 +195,10 @@ sealed class TrackerBridge
 }
 
 sealed record DurabilityReading(int Current, int Maximum, double SecondsPerCraft, int Signal,
-    double SentAt, double ObservedAt, string InstanceId, string SessionId, int BridgeVersion);
+    double SentAt, double ObservedAt, string InstanceId, string SessionId, int BridgeVersion)
+{
+    public GuildReading? GuildStatus { get; init; }
+}
 sealed record BridgeHealth(bool Ok, string AppId, string AppVersion, int BridgeVersion,
     string InstanceId, int Signal, int LastAckSignal, int Port, int Pid, bool PlannerExists, bool Sample);
 sealed record Acknowledgment(string InstanceId, int Signal);
@@ -179,4 +216,8 @@ sealed record BridgeError(string Error);
 [JsonSerializable(typeof(RecipeLookup))]
 [JsonSerializable(typeof(MarketQuotes))]
 [JsonSerializable(typeof(PriceSnapshot))]
+[JsonSerializable(typeof(GuildReading))]
+[JsonSerializable(typeof(SessionState))]
+[JsonSerializable(typeof(SessionCommand))]
+[JsonSerializable(typeof(SessionHistory))]
 partial class BridgeJson : JsonSerializerContext;
