@@ -33,6 +33,14 @@ try {
     if ($reply.acknowledged_signal -ne 1 -or (Invoke-RestMethod "$base/health" -TimeoutSec 5).last_ack_signal -ne 1) {
         throw 'Acknowledgment was not recorded'
     }
+    $origin = @{ Origin = $base }
+    $import = '{"region":"NA","items":[{"id":100,"name":"Test material","price":4200}]}'
+    $saved = Invoke-RestMethod "$base/market-prices" -Method Post -Headers $origin -ContentType 'application/json' -Body $import -TimeoutSec 5
+    if ($saved.quotes_received -ne 1) { throw 'Market quote was not imported' }
+    $lookup = Invoke-RestMethod "$base/craft-quotes" -Method Post -Headers $origin -ContentType 'application/json' -Body '{"region":"NA","ids":[100]}' -TimeoutSec 5
+    if ($lookup.items.Count -ne 1 -or $lookup.items[0].price -ne 4200) { throw 'Recipe quote did not round-trip' }
+    $otherRegion = Invoke-RestMethod "$base/craft-quotes" -Method Post -Headers $origin -ContentType 'application/json' -Body '{"region":"EU","ids":[100]}' -TimeoutSec 5
+    if ($otherRegion.items.Count -ne 0) { throw 'Market quote leaked across regions' }
     'Native bridge smoke test passed.'
 } finally {
     if (!$process.HasExited) { Stop-Process -Id $process.Id }
