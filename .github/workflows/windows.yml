@@ -1,0 +1,73 @@
+name: Windows
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+    tags: ['v*']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  native-build:
+    name: Native Windows build and smoke test
+    runs-on: windows-2025
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+      - name: Validate version and publish
+        shell: pwsh
+        run: |
+          $version = (Get-Content VERSION -Raw).Trim()
+          if ($version -notmatch '^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$') { throw 'Invalid release version' }
+          if ($env:GITHUB_REF_TYPE -eq 'tag' -and $env:GITHUB_REF_NAME -cne "v$version") {
+              throw 'The release tag must match VERSION'
+          }
+          dotnet publish -c Release -r win-x64 -p:TreatWarningsAsErrors=true -o artifacts/native
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+      - name: Test the published executable
+        shell: pwsh
+        run: ./scripts/Test-Bridge.ps1 -Executable artifacts/native/Companion.exe
+      - name: Package Windows build
+        shell: pwsh
+        run: |
+          $version = (Get-Content VERSION -Raw).Trim()
+          $archive = "BDO-Companion-$version-win-x64.zip"
+          Compress-Archive -LiteralPath artifacts/native/Companion.exe, README.md, CHANGELOG.md, VERSION -DestinationPath "artifacts/$archive"
+          $hash = (Get-FileHash "artifacts/$archive" -Algorithm SHA256).Hash.ToLowerInvariant()
+          "$hash  $archive" | Set-Content "artifacts/$archive.sha256" -Encoding ascii
+      - uses: actions/upload-artifact@v4
+        with:
+          name: windows-x64
+          path: |
+            artifacts/*.zip
+            artifacts/*.sha256
+          if-no-files-found: error
+
+  draft-release:
+    if: github.ref_type == 'tag'
+    needs: native-build
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: windows-x64
+      - name: Create release draft
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+          options=()
+          if [[ "$RELEASE_TAG" == *-* ]]; then options+=(--prerelease); fi
+          gh release create "$RELEASE_TAG" ./*.zip ./*.sha256 --repo "$GITHUB_REPOSITORY" --verify-tag --draft --generate-notes "${options[@]}"

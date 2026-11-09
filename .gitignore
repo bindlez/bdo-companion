@@ -1,0 +1,16 @@
+bin/
+obj/
+artifacts/
+dist/
+.vs/
+*.user
+*.suo
+.env
+.env.*
+*.sqlite*
+*.db
+*.db-wal
+*.db-shm
+*.log
+captures/
+profiles/
